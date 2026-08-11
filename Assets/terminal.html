@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Terminal</title>
+    <link rel="stylesheet" href="xterm.css">
+    <style>
+        html, body {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #0f1214;
+            overflow: hidden;
+        }
+        .terminals-root {
+            height: 100%;
+            width: 100%;
+        }
+        .terminal-container {
+            height: 100%;
+            width: 100%;
+            display: none;
+        }
+        .terminal-container.active {
+            display: block;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f1214;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2a2d32;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3e4249;
+        }
+    </style>
+</head>
+<body>
+    <div class="terminals-root"></div>
+
+    <script src="xterm.js"></script>
+    <script src="xterm-addon-fit.js"></script>
+    <script>
+        const terminals = {};
+        let activeTabId = null;
+
+        function createTerminal(tabId) {
+            if (terminals[tabId]) { return; }
+            const container = document.createElement('div');
+            container.id = `terminal-${tabId}`;
+            container.className = 'terminal-container';
+            document.querySelector('.terminals-root').appendChild(container);
+            
+            const term = new Terminal({
+                cursorBlink: true,
+                fontFamily: 'Consolas, "Courier New", monospace',
+                fontSize: 14,
+                theme: {
+                    background: '#0f1214',
+                    foreground: '#ffffff'
+                }
+            });
+
+            const fitAddon = new FitAddon.FitAddon();
+            term.loadAddon(fitAddon);
+            term.open(container);
+            
+            term.onData(data => {
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({
+                        type: 'input',
+                        tabId: tabId,
+                        data: data
+                    });
+                }
+            });
+
+            terminals[tabId] = { term, fitAddon, container };
+            setActiveTerminal(tabId);
+        }
+
+        function removeTerminal(tabId) {
+            if (!terminals[tabId]) { return; }
+            terminals[tabId].term.dispose();
+            terminals[tabId].container.remove();
+            delete terminals[tabId];
+        }
+
+        function setActiveTerminal(tabId) {
+            if (!terminals[tabId]) { return; }
+            if (activeTabId && terminals[activeTabId]) {
+                terminals[activeTabId].container.classList.remove('active');
+            }
+            activeTabId = tabId;
+            terminals[tabId].container.classList.add('active');
+
+            setTimeout(() => {
+                notifyResize(tabId);
+                terminals[tabId].term.focus();
+            }, 10);
+        }
+
+        function writeToTerminal(tabId, data) {
+            if (terminals[tabId]) {
+                terminals[tabId].term.write(data);
+            }
+        }
+
+        function notifyResize(tabId) {
+            if (!terminals[tabId]) return;
+            terminals[tabId].fitAddon.fit();
+            const cols = terminals[tabId].term.cols;
+            const rows = terminals[tabId].term.rows;
+
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage({
+                    type: 'resize',
+                    tabId: tabId,
+                    cols: cols,
+                    rows: rows
+                });
+            }
+        }
+
+        if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.addEventListener('message', event => {
+                const message = event.data;
+                if (!message) return;
+
+                switch (message.type) {
+                    case 'create':
+                        createTerminal(message.tabId);
+                        break;
+                    case 'remove':
+                        removeTerminal(message.tabId);
+                        break;
+                    case 'activate':
+                        setActiveTerminal(message.tabId);
+                        break;
+                    case 'output':
+                        writeToTerminal(message.tabId, message.data);
+                        break;
+                }
+            });
+        }
+
+        window.addEventListener('resize', () => {
+            if (activeTabId && terminals[activeTabId]) {
+                notifyResize(activeTabId);
+            }
+        });
+    </script>
+</body>
+</html>
