@@ -41,8 +41,6 @@ public sealed class TerminalSession : IDisposable
         if (hr != 0)
             throw new InvalidOperationException($"Failed to create pseudo console. HRESULT: {hr}");
 
-        // После передачи труб в CreatePseudoConsole, закрываем наши клиентские концы,
-        // которые отдали в ConPTY, чтобы ресурсы не дублировались
         NativeMethods.CloseHandle(_hInputReadPipe);
         _hInputReadPipe = IntPtr.Zero;
         NativeMethods.CloseHandle(_hOutputWritePipe);

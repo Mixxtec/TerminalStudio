@@ -10,6 +10,64 @@
         MinHeight="400" MinWidth="600"
         Background="#FF1E1E1E">
     <Grid>
-        <wv2:WebView2 x:Name="webView" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Background="#252526">
+            <ItemsControl x:Name="tabsControl">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="#333333" CornerRadius="4" Margin="4,4,0,4" Padding="8,0,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Title}" 
+                                    Foreground="White" 
+                                    VerticalAlignment="Center" 
+                                    Cursor="Hand" 
+                                    MouseLeftButtonDown="TabHeader_MouseLeftButtonDown"/>
+                                <Button Content="×" 
+                                    FontSize="16"
+                                    Foreground="#AAAAAA" 
+                                    Background="Transparent" 
+                                    BorderThickness="0" 
+                                    Margin="8"
+                                    Cursor="Hand" 
+                                    Click="CloseTab_Click" 
+                                    Tag="{Binding Id}"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Button x:Name="btnAddTab" 
+                    Content="+" 
+                    Width="30" 
+                    Height="30" 
+                    Margin="5"
+                    Background="Transparent"
+                    Foreground="White"
+                    Cursor="Hand" 
+                    Click="btnAddTab_Click">
+                <Button.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="PowerShell" Click="btnAddPowerShell_Click" />
+                        <MenuItem Header="CMD" Click="btnAddCMD_Click" />
+                        <MenuItem Header="WSL" Click="btnAddWSL_Click" />
+                    </ContextMenu>
+                </Button.ContextMenu>
+            </Button>
+        </StackPanel>
+
+        <wv2:WebView2 x:Name="webView" 
+                      Grid.Row="1"
+                      HorizontalAlignment="Stretch" 
+                      VerticalAlignment="Stretch" />
     </Grid>
 </Window>
