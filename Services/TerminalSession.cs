@@ -19,7 +19,7 @@ public sealed class TerminalSession : IDisposable
 
     public event Action<byte[]>? OutputReceived;
 
-    public void Start(string commandLine = "powershell.exe", short cols = 80, short rows = 25)
+    public void Start(string commandLine = "powershell.exe", string? workingDirectory = null, short cols = 80, short rows = 25)
     {
         if (_hPC != IntPtr.Zero) return;
 
@@ -46,7 +46,7 @@ public sealed class TerminalSession : IDisposable
         NativeMethods.CloseHandle(_hOutputWritePipe);
         _hOutputWritePipe = IntPtr.Zero;
 
-        StartProcess(commandLine);
+        StartProcess(commandLine, workingDirectory);
 
         _cancellationTokenSource = new CancellationTokenSource();
         _readOutputTask = Task.Run(() => ReadOutputAsync(_cancellationTokenSource.Token));
@@ -66,8 +66,33 @@ public sealed class TerminalSession : IDisposable
         NativeMethods.ResizePseudoConsole(_hPC, size);
     }
 
-    private void StartProcess(string commandLine)
+    private void StartProcess(string commandLine, string? workingDirectory)
     {
+        string finalCommandLine = commandLine;
+
+        if (commandLine.Equals("powershell.exe", StringComparison.OrdinalIgnoreCase) || commandLine.Equals("powershell", StringComparison.OrdinalIgnoreCase))
+        {
+            string psScript = "function global:prompt { $p = $executionContext.SessionState.Path.CurrentFileSystemLocation.ProviderPath; $e = [char]27; Write-Host -NoNewline \"$e]9;9;`\"$p`\"$e\\\"; \"PS $p> \" }";
+            string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(psScript));
+            finalCommandLine = $"powershell.exe -NoExit -EncodedCommand {encoded}";
+        }
+        else if (commandLine.Equals("pwsh.exe", StringComparison.OrdinalIgnoreCase) || commandLine.Equals("pwsh", StringComparison.OrdinalIgnoreCase))
+        {
+            string psScript = "function global:prompt { $p = $executionContext.SessionState.Path.CurrentFileSystemLocation.ProviderPath; $e = [char]27; Write-Host -NoNewline \"$e]9;9;`\"$p`\"$e\\\"; \"PS $p> \" }";
+            string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(psScript));
+            finalCommandLine = $"pwsh.exe -NoExit -EncodedCommand {encoded}";
+        }
+
+        Environment.SetEnvironmentVariable("PROMPT", "$E]9;9;\"$P\"$E\\$P$G");
+        Environment.SetEnvironmentVariable("PROMPT_COMMAND", "printf \"\\033]9;9;\\\"%s\\\"\\033\\\\\" \"$PWD\"");
+
+        string existingWslEnv = Environment.GetEnvironmentVariable("WSLENV") ?? "";
+        if (!existingWslEnv.Contains("PROMPT_COMMAND"))
+        {
+            string newWslEnv = string.IsNullOrEmpty(existingWslEnv) ? "PROMPT_COMMAND/u" : existingWslEnv + ":PROMPT_COMMAND/u";
+            Environment.SetEnvironmentVariable("WSLENV", newWslEnv);
+        }
+
         IntPtr lpSize = IntPtr.Zero;
         NativeMethods.InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref lpSize);
         IntPtr lpAttributeList = Marshal.AllocHGlobal(lpSize);
@@ -99,13 +124,13 @@ public sealed class TerminalSession : IDisposable
 
             if (!NativeMethods.CreateProcessW(
                 null,
-                commandLine,
+                finalCommandLine,
                 ref processSa,
                 ref processSa,
                 false,
                 creationFlags,
                 IntPtr.Zero,
-                null,
+                workingDirectory,
                 ref startupInfoEx,
                 out _processInfo))
             {

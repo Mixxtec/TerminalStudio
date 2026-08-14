@@ -50,6 +50,24 @@
         const terminals = {};
         let activeTabId = null;
 
+        function parseOsc7Url(data) {
+            try {
+                let raw = decodeURIComponent(data);
+                if (raw.startsWith('file://')) {
+                    const pathStart = raw.indexOf('/', 7);
+                    if (pathStart !== -1) {
+                        raw = raw.substring(pathStart);
+                    }
+                }
+                if (/^\/[A-Za-z]:/.test(raw)) {
+                    raw = raw.substring(1);
+                }
+                return raw.replace(/\//g, '\\');
+            } catch (e) {
+                return data;
+            }
+        }
+
         function createTerminal(tabId) {
             if (terminals[tabId]) { return; }
             const container = document.createElement('div');
@@ -70,6 +88,28 @@
             const fitAddon = new FitAddon.FitAddon();
             term.loadAddon(fitAddon);
             term.open(container);
+
+            term.parser.registerOscHandler(7, data => {
+                const cwd = parseOsc7Url(data);
+                if (cwd && window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({ type: 'cwd', tabId, cwd });
+                }
+                return true;
+            });
+
+            term.parser.registerOscHandler(9, data => {
+                if (data.startsWith('9;')) {
+                    let cwd = data.substring(2).trim();
+                    if (cwd.startsWith('"') && cwd.endsWith('"')) {
+                        cwd = cwd.slice(1, -1);
+                    }
+                    if (cwd && window.chrome && window.chrome.webview) {
+                        window.chrome.webview.postMessage({ type: 'cwd', tabId, cwd });
+                    }
+                    return true;
+                }
+                return false;
+            });
             
             term.onData(data => {
                 if (window.chrome && window.chrome.webview) {

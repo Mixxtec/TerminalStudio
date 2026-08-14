@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using TerminalStudio.Services;
+using TerminalStudio.Models;
 
 namespace TerminalStudio;
 
@@ -31,24 +32,7 @@ public partial class MainWindow : Window
         Loaded += Window_Loaded;
         Closing += (s, e) =>
         {
-            var config = new SessionConfig
-            {
-                ActiveTabId = _activeTabId,
-                Tabs = _tabItems.Select(t => new TerminalConfig
-                {
-                    Id = t.Id,
-                    Title = t.Title,
-                    CommandLine = t.CommandLine
-                }).ToList()
-            };
-
-            string? dir = Path.GetDirectoryName(configPath);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-            {
-                Directory.CreateDirectory(dir);
-            }
-
-            _configService.SaveConfig(config);
+            SaveSessionConfig();
 
             foreach (var session in _sessions.Values)
             {
@@ -56,6 +40,34 @@ public partial class MainWindow : Window
             }
             _sessions.Clear();
         };
+    }
+
+    private void SaveSessionConfig()
+    {
+        var config = new SessionConfig
+        {
+            ActiveTabId = _activeTabId,
+            Tabs = _tabItems.Select(t => new TerminalConfig
+            {
+                Id = t.Id,
+                Title = t.Title,
+                CommandLine = t.CommandLine,
+                WorkingDirectory = t.WorkingDirectory
+            }).ToList()
+        };
+
+        string configPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "TerminalStudio",
+            "session.json"
+        );
+        string? dir = Path.GetDirectoryName(configPath);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        _configService.SaveConfig(config);
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -91,6 +103,16 @@ public partial class MainWindow : Window
                         session.Resize(cols, rows);
                     }
                 }
+                else if (type.Equals("cwd", StringComparison.OrdinalIgnoreCase))
+                {
+                    string cwd = root.GetProperty("cwd").GetString() ?? "";
+                    var tab = _tabItems.FirstOrDefault(t => t.Id == tabId);
+                    if (tab != null && !string.IsNullOrEmpty(cwd))
+                    {
+                        tab.WorkingDirectory = cwd;
+                        SaveSessionConfig();
+                    }
+                }
             }
             catch { }
         };
@@ -110,7 +132,7 @@ public partial class MainWindow : Window
             {
                 foreach (var tab in config.Tabs)
                 {
-                    CreateTab(tab.Id, tab.Title, tab.CommandLine);
+                    CreateTab(tab.Id, tab.Title, tab.CommandLine, tab.WorkingDirectory);
                 }
 
                 if (!string.IsNullOrEmpty(config.ActiveTabId) && _sessions.ContainsKey(config.ActiveTabId))
@@ -121,7 +143,7 @@ public partial class MainWindow : Window
         };
     }
 
-    private void CreateTab(string tabId, string title, string commandLine = "powershell.exe")
+    private void CreateTab(string tabId, string title, string commandLine = "powershell.exe", string? workingDirectory = null)
     {
         string createMsg = JsonSerializer.Serialize(new { type = "create", tabId });
         webView.CoreWebView2.PostWebMessageAsJson(createMsg);
@@ -138,10 +160,11 @@ public partial class MainWindow : Window
         };
 
         _sessions[tabId] = session;
-        _tabItems.Add(new TabItemModel { Id = tabId, Title = title, CommandLine = commandLine });
+        _tabItems.Add(new TabItemModel { Id = tabId, Title = title, CommandLine = commandLine, WorkingDirectory = workingDirectory });
 
-        session.Start(commandLine);
+        session.Start(commandLine, workingDirectory);
         ActivateTab(tabId);
+        SaveSessionConfig();
     }
 
     private void ActivateTab(string tabId)
@@ -149,6 +172,7 @@ public partial class MainWindow : Window
         _activeTabId = tabId;
         string activateMsg = JsonSerializer.Serialize(new { type = "activate", tabId });
         webView.CoreWebView2.PostWebMessageAsJson(activateMsg);
+        SaveSessionConfig();
     }
 
     private void RemoveTab(string tabId)
@@ -180,6 +204,7 @@ public partial class MainWindow : Window
                 _activeTabId = null;
             }
         }
+        SaveSessionConfig();
     }
 
     private void TabHeader_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -209,18 +234,18 @@ public partial class MainWindow : Window
     private void btnAddPowerShell_Click(object sender, RoutedEventArgs e)
     {
         string newTabId = Guid.NewGuid().ToString();
-        CreateTab(newTabId, "PowerShell", "powershell.exe");
+        CreateTab(newTabId, "PowerShell", "powershell.exe", Environment.CurrentDirectory);
     }
 
     private void btnAddCMD_Click(object sender, RoutedEventArgs e)
     {
         string newTabId = Guid.NewGuid().ToString();
-        CreateTab(newTabId, "CMD", "cmd.exe");
+        CreateTab(newTabId, "CMD", "cmd.exe", Environment.CurrentDirectory);
     }
 
     private void btnAddWSL_Click(object sender, RoutedEventArgs e)
     {
         string newTabId = Guid.NewGuid().ToString();
-        CreateTab(newTabId, "WSL", "wsl.exe");
+        CreateTab(newTabId, "WSL", "wsl.exe", Environment.CurrentDirectory);
     }
 }

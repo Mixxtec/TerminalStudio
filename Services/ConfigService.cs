@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using TerminalStudio.Models;
 
 namespace TerminalStudio.Services;
 
