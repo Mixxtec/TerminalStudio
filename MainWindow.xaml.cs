@@ -1,12 +1,18 @@
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
-using TerminalStudio.Services;
+using System.Windows.Media;
 using TerminalStudio.Models;
+using TerminalStudio.Services;
 
 namespace TerminalStudio;
 
@@ -16,6 +22,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<TabItemModel> _tabItems = new();
     private readonly ConfigService _configService;
     private string? _activeTabId;
+    private TabItemModel? _editingTab;
 
     public MainWindow()
     {
@@ -47,13 +54,7 @@ public partial class MainWindow : Window
         var config = new SessionConfig
         {
             ActiveTabId = _activeTabId,
-            Tabs = _tabItems.Select(t => new TerminalConfig
-            {
-                Id = t.Id,
-                Title = t.Title,
-                CommandLine = t.CommandLine,
-                WorkingDirectory = t.WorkingDirectory
-            }).ToList()
+            Tabs = _tabItems.Select(t => t.Config).ToList()
         };
 
         string configPath = Path.Combine(
@@ -126,13 +127,20 @@ public partial class MainWindow : Window
 
             if (config.Tabs.Count == 0)
             {
-                CreateTab("1", "PowerShell", "powershell.exe");
+                var defaultTab = new TerminalConfig
+                {
+                    Id = "1",
+                    Title = "PowerShell",
+                    CommandLine = "powershell.exe",
+                    Type = "PowerShell"
+                };
+                CreateTab(defaultTab);
             }
             else
             {
                 foreach (var tab in config.Tabs)
                 {
-                    CreateTab(tab.Id, tab.Title, tab.CommandLine, tab.WorkingDirectory);
+                    CreateTab(tab);
                 }
 
                 if (!string.IsNullOrEmpty(config.ActiveTabId) && _sessions.ContainsKey(config.ActiveTabId))
@@ -143,8 +151,9 @@ public partial class MainWindow : Window
         };
     }
 
-    private void CreateTab(string tabId, string title, string commandLine = "powershell.exe", string? workingDirectory = null)
+    private void CreateTab(TerminalConfig config)
     {
+        string tabId = config.Id;
         string createMsg = JsonSerializer.Serialize(new { type = "create", tabId });
         webView.CoreWebView2.PostWebMessageAsJson(createMsg);
 
@@ -160,9 +169,13 @@ public partial class MainWindow : Window
         };
 
         _sessions[tabId] = session;
-        _tabItems.Add(new TabItemModel { Id = tabId, Title = title, CommandLine = commandLine, WorkingDirectory = workingDirectory });
+        var tabModel = new TabItemModel
+        {
+            Config = config
+        };
+        _tabItems.Add(tabModel);
 
-        session.Start(commandLine, workingDirectory);
+        session.Start(config.CommandLine, config.WorkingDirectory, config.Proxy);
         ActivateTab(tabId);
         SaveSessionConfig();
     }
@@ -170,6 +183,11 @@ public partial class MainWindow : Window
     private void ActivateTab(string tabId)
     {
         _activeTabId = tabId;
+        foreach (var tab in _tabItems)
+        {
+            tab.IsActive = (tab.Id == tabId);
+        }
+
         string activateMsg = JsonSerializer.Serialize(new { type = "activate", tabId });
         webView.CoreWebView2.PostWebMessageAsJson(activateMsg);
         SaveSessionConfig();
@@ -209,7 +227,7 @@ public partial class MainWindow : Window
 
     private void TabHeader_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (sender is TextBlock tb && tb.DataContext is TabItemModel model)
+        if (sender is FrameworkElement elem && elem.DataContext is TabItemModel model)
         {
             ActivateTab(model.Id);
         }
@@ -233,19 +251,151 @@ public partial class MainWindow : Window
 
     private void btnAddPowerShell_Click(object sender, RoutedEventArgs e)
     {
-        string newTabId = Guid.NewGuid().ToString();
-        CreateTab(newTabId, "PowerShell", "powershell.exe", Environment.CurrentDirectory);
+        CreateTab(new TerminalConfig
+        {
+            Id = Guid.NewGuid().ToString(),
+            Title = "PowerShell",
+            CommandLine = "powershell.exe",
+            Type = "PowerShell",
+            WorkingDirectory = Environment.CurrentDirectory
+        });
     }
 
     private void btnAddCMD_Click(object sender, RoutedEventArgs e)
     {
-        string newTabId = Guid.NewGuid().ToString();
-        CreateTab(newTabId, "CMD", "cmd.exe", Environment.CurrentDirectory);
+        CreateTab(new TerminalConfig
+        {
+            Id = Guid.NewGuid().ToString(),
+            Title = "CMD",
+            CommandLine = "cmd.exe",
+            Type = "CMD",
+            WorkingDirectory = Environment.CurrentDirectory
+        });
     }
 
     private void btnAddWSL_Click(object sender, RoutedEventArgs e)
     {
-        string newTabId = Guid.NewGuid().ToString();
-        CreateTab(newTabId, "WSL", "wsl.exe", Environment.CurrentDirectory);
+        CreateTab(new TerminalConfig
+        {
+            Id = Guid.NewGuid().ToString(),
+            Title = "WSL",
+            CommandLine = "wsl.exe",
+            Type = "WSL",
+            WorkingDirectory = Environment.CurrentDirectory
+        });
+    }
+
+    private void TabSettings_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is TabItemModel model)
+        {
+            _editingTab = model;
+            txtTabTitle.Text = model.Title;
+
+            var proxy = model.Config.Proxy;
+            cmbProxyMode.SelectedIndex = proxy.Mode switch
+            {
+                ProxyMode.Direct => 0,
+                ProxyMode.LocalVPN => 1,
+                ProxyMode.Custom => 2,
+                _ => 0
+            };
+
+            txtProxyAddress.Text = proxy.Address ?? "http://127.0.0.1:10809";
+            txtNoProxy.Text = proxy.NoProxy ?? "localhost,127.0.0.1";
+            txtProxyStatus.Text = "";
+
+            UpdateProxyFieldsVisibility();
+
+            settingsPopup.PlacementTarget = btn;
+            settingsPopup.IsOpen = true;
+        }
+    }
+
+    private void cmbProxyMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateProxyFieldsVisibility();
+    }
+
+    private void UpdateProxyFieldsVisibility()
+    {
+        if (panelProxyFields == null || cmbProxyMode == null) return;
+
+        if (cmbProxyMode.SelectedIndex == 0)
+        {
+            panelProxyFields.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            panelProxyFields.Visibility = Visibility.Visible;
+            if (cmbProxyMode.SelectedIndex == 1 && string.IsNullOrWhiteSpace(txtProxyAddress.Text))
+            {
+                txtProxyAddress.Text = "http://127.0.0.1:10809";
+            }
+        }
+    }
+
+    private async void btnCheckProxy_Click(object sender, RoutedEventArgs e)
+    {
+        txtProxyStatus.Text = "Checking...";
+        txtProxyStatus.Foreground = new SolidColorBrush(Color.FromRgb(170, 170, 170));
+
+        bool ok = await NetworkUtils.CheckProxyAvailableAsync(txtProxyAddress.Text);
+        if (ok)
+        {
+            txtProxyStatus.Text = "Available";
+            txtProxyStatus.Foreground = new SolidColorBrush(Color.FromRgb(78, 201, 176));
+        }
+        else
+        {
+            txtProxyStatus.Text = "Unavailable";
+            txtProxyStatus.Foreground = new SolidColorBrush(Color.FromRgb(244, 71, 71));
+        }
+    }
+
+    private void btnApplySettings_Click(object sender, RoutedEventArgs e)
+    {
+        if (_editingTab == null) return;
+
+        settingsPopup.IsOpen = false;
+        _editingTab.Title = txtTabTitle.Text.Trim();
+
+        var newMode = cmbProxyMode.SelectedIndex switch
+        {
+            0 => ProxyMode.Direct,
+            1 => ProxyMode.LocalVPN,
+            2 => ProxyMode.Custom,
+            _ => ProxyMode.Direct
+        };
+
+        var oldProxy = _editingTab.Config.Proxy;
+        bool proxyChanged = oldProxy.Mode != newMode ||
+                           !string.Equals(oldProxy.Address, txtProxyAddress.Text.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                           !string.Equals(oldProxy.NoProxy, txtNoProxy.Text.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        _editingTab.Config.Proxy = new ProxyConfig
+        {
+            Mode = newMode,
+            Address = txtProxyAddress.Text.Trim(),
+            NoProxy = txtNoProxy.Text.Trim()
+        };
+
+        SaveSessionConfig();
+
+        if (proxyChanged)
+        {
+            var dialog = new RestartConfirmDialog
+            {
+                Owner = this
+            };
+
+            if (dialog.ShowDialog() == true && dialog.RestartAccepted)
+            {
+                if (_sessions.TryGetValue(_editingTab.Id, out var session))
+                {
+                    session.Restart(_editingTab.Config.Proxy, _editingTab.WorkingDirectory);
+                }
+            }
+        }
     }
 }

@@ -1,6 +1,12 @@
 using System;
-using System.Text;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using TerminalStudio.Models;
 
 namespace TerminalStudio.Services;
 
@@ -17,11 +23,19 @@ public sealed class TerminalSession : IDisposable
     private Task? _readOutputTask;
     private bool _disposed;
 
+    private string _currentCommandLine = "powershell.exe";
+    private string? _currentWorkingDirectory;
+    private ProxyConfig _currentProxy = new();
+
     public event Action<byte[]>? OutputReceived;
 
-    public void Start(string commandLine = "powershell.exe", string? workingDirectory = null, short cols = 80, short rows = 25)
+    public void Start(string commandLine = "powershell.exe", string? workingDirectory = null, ProxyConfig? proxy = null, short cols = 80, short rows = 25)
     {
         if (_hPC != IntPtr.Zero) return;
+
+        _currentCommandLine = commandLine;
+        _currentWorkingDirectory = workingDirectory;
+        _currentProxy = proxy ?? new ProxyConfig();
 
         var sa = new NativeMethods.SECURITY_ATTRIBUTES
         {
@@ -46,10 +60,24 @@ public sealed class TerminalSession : IDisposable
         NativeMethods.CloseHandle(_hOutputWritePipe);
         _hOutputWritePipe = IntPtr.Zero;
 
-        StartProcess(commandLine, workingDirectory);
+        StartProcess(_currentCommandLine, _currentWorkingDirectory, _currentProxy);
 
         _cancellationTokenSource = new CancellationTokenSource();
         _readOutputTask = Task.Run(() => ReadOutputAsync(_cancellationTokenSource.Token));
+    }
+
+    public void Restart(ProxyConfig? newProxy = null, string? newWorkingDirectory = null)
+    {
+        short cols = 80;
+        short rows = 25;
+
+        DisposeProcessAndPipes();
+
+        _disposed = false;
+        if (newProxy != null) _currentProxy = newProxy;
+        if (newWorkingDirectory != null) _currentWorkingDirectory = newWorkingDirectory;
+
+        Start(_currentCommandLine, _currentWorkingDirectory, _currentProxy, cols, rows);
     }
 
     public void WriteInput(string text)
@@ -66,7 +94,7 @@ public sealed class TerminalSession : IDisposable
         NativeMethods.ResizePseudoConsole(_hPC, size);
     }
 
-    private void StartProcess(string commandLine, string? workingDirectory)
+    private void StartProcess(string commandLine, string? workingDirectory, ProxyConfig proxy)
     {
         string finalCommandLine = commandLine;
 
@@ -83,15 +111,7 @@ public sealed class TerminalSession : IDisposable
             finalCommandLine = $"pwsh.exe -NoExit -EncodedCommand {encoded}";
         }
 
-        Environment.SetEnvironmentVariable("PROMPT", "$E]9;9;\"$P\"$E\\$P$G");
-        Environment.SetEnvironmentVariable("PROMPT_COMMAND", "printf \"\\033]9;9;\\\"%s\\\"\\033\\\\\" \"$PWD\"");
-
-        string existingWslEnv = Environment.GetEnvironmentVariable("WSLENV") ?? "";
-        if (!existingWslEnv.Contains("PROMPT_COMMAND"))
-        {
-            string newWslEnv = string.IsNullOrEmpty(existingWslEnv) ? "PROMPT_COMMAND/u" : existingWslEnv + ":PROMPT_COMMAND/u";
-            Environment.SetEnvironmentVariable("WSLENV", newWslEnv);
-        }
+        IntPtr lpEnvironment = CreateEnvironmentBlock(proxy);
 
         IntPtr lpSize = IntPtr.Zero;
         NativeMethods.InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref lpSize);
@@ -129,7 +149,7 @@ public sealed class TerminalSession : IDisposable
                 ref processSa,
                 false,
                 creationFlags,
-                IntPtr.Zero,
+                lpEnvironment,
                 workingDirectory,
                 ref startupInfoEx,
                 out _processInfo))
@@ -139,9 +159,83 @@ public sealed class TerminalSession : IDisposable
         }
         finally
         {
+            if (lpEnvironment != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(lpEnvironment);
+            }
             NativeMethods.DeleteProcThreadAttributeList(lpAttributeList);
             Marshal.FreeHGlobal(lpAttributeList);
         }
+    }
+
+    private IntPtr CreateEnvironmentBlock(ProxyConfig proxy)
+    {
+        var envVars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        {
+            if (entry.Key is string key && entry.Value is string value)
+            {
+                envVars[key] = value;
+            }
+        }
+
+        envVars["PROMPT"] = "$E]9;9;\"$P\"$E\\$P$G";
+        envVars["PROMPT_COMMAND"] = "printf \"\\033]9;9;\\\"%s\\\"\\033\\\\\" \"$PWD\"";
+
+        string existingWslEnv = envVars.TryGetValue("WSLENV", out var wslVal) ? wslVal : "";
+        if (!existingWslEnv.Contains("PROMPT_COMMAND"))
+        {
+            envVars["WSLENV"] = string.IsNullOrEmpty(existingWslEnv) ? "PROMPT_COMMAND/u" : existingWslEnv + ":PROMPT_COMMAND/u";
+        }
+
+        if (proxy.Mode != ProxyMode.Direct && !string.IsNullOrWhiteSpace(proxy.Address))
+        {
+            string addr = proxy.Address.Trim();
+            envVars["HTTP_PROXY"] = addr;
+            envVars["HTTPS_PROXY"] = addr;
+            envVars["ALL_PROXY"] = addr;
+            envVars["http_proxy"] = addr;
+            envVars["https_proxy"] = addr;
+            envVars["all_proxy"] = addr;
+
+            if (!string.IsNullOrWhiteSpace(proxy.NoProxy))
+            {
+                string noProxy = proxy.NoProxy.Trim();
+                envVars["NO_PROXY"] = noProxy;
+                envVars["no_proxy"] = noProxy;
+            }
+
+            string currentWslEnv = envVars["WSLENV"];
+            string proxyWslVars = "HTTP_PROXY/u:HTTPS_PROXY/u:ALL_PROXY/u:NO_PROXY/u";
+            if (!currentWslEnv.Contains("HTTP_PROXY"))
+            {
+                envVars["WSLENV"] = string.IsNullOrEmpty(currentWslEnv) ? proxyWslVars : currentWslEnv + ":" + proxyWslVars;
+            }
+        }
+        else
+        {
+            envVars.Remove("HTTP_PROXY");
+            envVars.Remove("HTTPS_PROXY");
+            envVars.Remove("ALL_PROXY");
+            envVars.Remove("http_proxy");
+            envVars.Remove("https_proxy");
+            envVars.Remove("all_proxy");
+            envVars.Remove("NO_PROXY");
+            envVars.Remove("no_proxy");
+        }
+
+        var sb = new StringBuilder();
+        foreach (var kvp in envVars)
+        {
+            sb.Append(kvp.Key).Append('=').Append(kvp.Value).Append('\0');
+        }
+        sb.Append('\0');
+
+        byte[] bytes = Encoding.Unicode.GetBytes(sb.ToString());
+        IntPtr pEnv = Marshal.AllocHGlobal(bytes.Length);
+        Marshal.Copy(bytes, 0, pEnv, bytes.Length);
+        return pEnv;
     }
 
     private void ReadOutputAsync(CancellationToken cancellationToken)
@@ -165,11 +259,8 @@ public sealed class TerminalSession : IDisposable
         }
     }
 
-    public void Dispose()
+    private void DisposeProcessAndPipes()
     {
-        if (_disposed) return;
-        _disposed = true;
-
         _cancellationTokenSource?.Cancel();
 
         if (_hPC != IntPtr.Zero)
@@ -201,5 +292,12 @@ public sealed class TerminalSession : IDisposable
             NativeMethods.CloseHandle(_processInfo.hThread);
             _processInfo.hThread = IntPtr.Zero;
         }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        DisposeProcessAndPipes();
     }
 }
