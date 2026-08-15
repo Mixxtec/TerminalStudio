@@ -37,6 +37,8 @@ public partial class MainWindow : Window
         _configService = new ConfigService(configPath);
 
         Loaded += Window_Loaded;
+        SizeChanged += (s, e) => SendFitMessage();
+        StateChanged += (s, e) => SendFitMessage();
         Closing += (s, e) =>
         {
             SaveSessionConfig();
@@ -178,6 +180,15 @@ public partial class MainWindow : Window
         session.Start(config.CommandLine, config.WorkingDirectory, config.Proxy);
         ActivateTab(tabId);
         SaveSessionConfig();
+    }
+
+    private void SendFitMessage()
+    {
+        if (webView?.CoreWebView2 != null)
+        {
+            string fitMsg = JsonSerializer.Serialize(new { type = "fit" });
+            webView.CoreWebView2.PostWebMessageAsJson(fitMsg);
+        }
     }
 
     private void ActivateTab(string tabId)

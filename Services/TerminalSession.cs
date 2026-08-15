@@ -51,7 +51,7 @@ public sealed class TerminalSession : IDisposable
             throw new InvalidOperationException("Failed to create output pipe.");
 
         var size = new NativeMethods.COORD(cols, rows);
-        int hr = NativeMethods.CreatePseudoConsole(size, _hInputReadPipe, _hOutputWritePipe, 0, out _hPC);
+        int hr = NativeMethods.CreatePseudoConsole(size, _hInputReadPipe, _hOutputWritePipe, NativeMethods.PSEUDOCONSOLE_PASSTHROUGH, out _hPC);
         if (hr != 0)
             throw new InvalidOperationException($"Failed to create pseudo console. HRESULT: {hr}");
 

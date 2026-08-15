@@ -18,12 +18,16 @@
             width: 100%;
         }
         .terminal-container {
-            height: 100%;
             width: 100%;
+            height: 100%;
             display: none;
         }
         .terminal-container.active {
             display: block;
+        }
+        .terminal-container .xterm {
+            height: 100%;
+            padding: 4px 0 0 6px;
         }
         ::-webkit-scrollbar {
             width: 8px;
@@ -49,6 +53,7 @@
     <script>
         const terminals = {};
         let activeTabId = null;
+        let resizeDebounce = null;
 
         function parseOsc7Url(data) {
             try {
@@ -77,11 +82,17 @@
             
             const term = new Terminal({
                 cursorBlink: true,
-                fontFamily: 'Consolas, "Courier New", monospace',
+                convertEol: true,
+                fontFamily: '"Cascadia Code", "Cascadia Mono", "CaskaydiaCove Nerd Font", "Fira Code Nerd Font", "JetBrains Mono", Consolas, monospace',
                 fontSize: 14,
+                lineHeight: 1.2,
+                letterSpacing: 0,
+                scrollback: 2000,
                 theme: {
                     background: '#0f1214',
-                    foreground: '#ffffff'
+                    foreground: '#ffffff',
+                    cursor: '#ffffff',
+                    selectionBackground: 'rgba(255, 255, 255, 0.3)'
                 }
             });
 
@@ -121,7 +132,7 @@
                 }
             });
 
-            terminals[tabId] = { term, fitAddon, container };
+            terminals[tabId] = { term, fitAddon, container, lastCols: 0, lastRows: 0 };
             setActiveTerminal(tabId);
         }
 
@@ -134,16 +145,16 @@
 
         function setActiveTerminal(tabId) {
             if (!terminals[tabId]) { return; }
-            if (activeTabId && terminals[activeTabId]) {
+            if (activeTabId && terminals[activeTabId] && activeTabId !== tabId) {
                 terminals[activeTabId].container.classList.remove('active');
             }
             activeTabId = tabId;
             terminals[tabId].container.classList.add('active');
 
-            setTimeout(() => {
-                notifyResize(tabId);
+            requestAnimationFrame(() => {
+                fitActiveTerminal(true);
                 terminals[tabId].term.focus();
-            }, 10);
+            });
         }
 
         function writeToTerminal(tabId, data) {
@@ -152,21 +163,40 @@
             }
         }
 
-        function notifyResize(tabId) {
-            if (!terminals[tabId]) return;
-            terminals[tabId].fitAddon.fit();
-            const cols = terminals[tabId].term.cols;
-            const rows = terminals[tabId].term.rows;
+        function fitActiveTerminal(force = false) {
+            if (!activeTabId || !terminals[activeTabId]) return;
+            const current = terminals[activeTabId];
+            if (!current.container.offsetParent) return;
 
-            if (window.chrome && window.chrome.webview) {
-                window.chrome.webview.postMessage({
-                    type: 'resize',
-                    tabId: tabId,
-                    cols: cols,
-                    rows: rows
-                });
-            }
+            try {
+                current.fitAddon.fit();
+                const cols = current.term.cols;
+                const rows = current.term.rows;
+
+                if (cols > 0 && rows > 0) {
+                    if (force || cols !== current.lastCols || rows !== current.lastRows) {
+                        current.lastCols = cols;
+                        current.lastRows = rows;
+                        if (window.chrome && window.chrome.webview) {
+                            window.chrome.webview.postMessage({
+                                type: 'resize',
+                                tabId: activeTabId,
+                                cols: cols,
+                                rows: rows
+                            });
+                        }
+                    }
+                }
+            } catch (e) {}
         }
+
+        const resizeObserver = new ResizeObserver(() => {
+            if (resizeDebounce) cancelAnimationFrame(resizeDebounce);
+            resizeDebounce = requestAnimationFrame(() => {
+                fitActiveTerminal();
+            });
+        });
+        resizeObserver.observe(document.querySelector('.terminals-root'));
 
         if (window.chrome && window.chrome.webview) {
             window.chrome.webview.addEventListener('message', event => {
@@ -186,15 +216,12 @@
                     case 'output':
                         writeToTerminal(message.tabId, message.data);
                         break;
+                    case 'fit':
+                        fitActiveTerminal(true);
+                        break;
                 }
             });
         }
-
-        window.addEventListener('resize', () => {
-            if (activeTabId && terminals[activeTabId]) {
-                notifyResize(activeTabId);
-            }
-        });
     </script>
 </body>
 </html>
