@@ -9,6 +9,12 @@ internal static class NativeMethods
     public const uint PSEUDOCONSOLE_INHERIT_CURSOR = 0x00000001;
     public const uint PSEUDOCONSOLE_PASSTHROUGH = 0x00000002;
 
+    public const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    public const int DWMWCP_ROUND = 2;
+
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
     [StructLayout(LayoutKind.Sequential)]
     public struct COORD
     {

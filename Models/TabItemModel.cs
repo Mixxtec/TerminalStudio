@@ -11,7 +11,14 @@ public class TabItemModel : INotifyPropertyChanged
     private string? _workingDirectory;
     private bool _isActive;
     private bool _hasError;
+    private double? _customWidth;
     private TerminalConfig _config = new();
+
+    public double? CustomWidth
+    {
+        get => _customWidth;
+        set => SetField(ref _customWidth, value);
+    }
 
     public string Id
     {

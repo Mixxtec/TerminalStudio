@@ -37,8 +37,17 @@ public partial class MainWindow : Window
         _configService = new ConfigService(configPath);
 
         Loaded += Window_Loaded;
+        Activated += (s, e) =>
+        {
+            Dispatcher.BeginInvoke(new Action(() => webView?.Focus()), System.Windows.Threading.DispatcherPriority.Input);
+        };
         SizeChanged += (s, e) => SendFitMessage();
-        StateChanged += (s, e) => SendFitMessage();
+        StateChanged += (s, e) =>
+        {
+            UpdateWindowBorder();
+            UpdateMaximizeButtonIcon();
+            SendFitMessage();
+        };
         Closing += (s, e) =>
         {
             SaveSessionConfig();
@@ -199,8 +208,17 @@ public partial class MainWindow : Window
             tab.IsActive = (tab.Id == tabId);
         }
 
-        string activateMsg = JsonSerializer.Serialize(new { type = "activate", tabId });
-        webView.CoreWebView2.PostWebMessageAsJson(activateMsg);
+        if (webView?.CoreWebView2 != null)
+        {
+            string activateMsg = JsonSerializer.Serialize(new { type = "activate", tabId });
+            webView.CoreWebView2.PostWebMessageAsJson(activateMsg);
+        }
+
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            webView?.Focus();
+        }), System.Windows.Threading.DispatcherPriority.Input);
+
         SaveSessionConfig();
     }
 
@@ -407,6 +425,116 @@ public partial class MainWindow : Window
                     session.Restart(_editingTab.Config.Proxy, _editingTab.WorkingDirectory);
                 }
             }
+        }
+    }
+
+    private void MinimizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState.Minimized;
+    }
+
+    private void MaximizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    }
+
+    private void CloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+    }
+
+    private void UpdateMaximizeButtonIcon()
+    {
+        if (pathMaximize != null)
+        {
+            pathMaximize.Data = WindowState == WindowState.Maximized
+                ? (Geometry)FindResource("IconRestore")
+                : (Geometry)FindResource("IconMaximize");
+        }
+    }
+
+    private void TabsScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is ScrollViewer scrollViewer)
+        {
+            if (e.Delta < 0)
+                scrollViewer.LineRight();
+            else
+                scrollViewer.LineLeft();
+            e.Handled = true;
+        }
+    }
+
+    private void TabResizeThumb_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        if (sender is FrameworkElement elem && elem.DataContext is TabItemModel model)
+        {
+            double currentWidth = model.CustomWidth ?? (VisualTreeHelper.GetParent(elem) is FrameworkElement parent ? parent.ActualWidth : 120);
+            if (currentWidth <= 0) currentWidth = 120;
+            double newWidth = Math.Clamp(currentWidth + e.HorizontalChange, 75, 350);
+            model.CustomWidth = newWidth;
+            UpdateTabsContainerLayout();
+        }
+    }
+
+    private void TabResizeThumb_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement elem && elem.DataContext is TabItemModel model)
+        {
+            model.CustomWidth = null;
+            UpdateTabsContainerLayout();
+            e.Handled = true;
+        }
+    }
+
+    private void UpdateTabsContainerLayout()
+    {
+        if (tabsHostContainer != null && btnAddTab != null && tabsScrollViewer != null)
+        {
+            double availableWidth = Math.Max(0, tabsHostContainer.ActualWidth - btnAddTab.ActualWidth - btnAddTab.Margin.Left - btnAddTab.Margin.Right - 4);
+            if (availableWidth > 0)
+            {
+                tabsScrollViewer.MaxWidth = availableWidth;
+            }
+        }
+    }
+
+    private void TabsHostContainer_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateTabsContainerLayout();
+    }
+
+    private void TabsControl_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateTabsContainerLayout();
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        try
+        {
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            int preference = NativeMethods.DWMWCP_ROUND;
+            NativeMethods.DwmSetWindowAttribute(hwnd, NativeMethods.DWMWA_WINDOW_CORNER_PREFERENCE, ref preference, sizeof(int));
+        }
+        catch { }
+    }
+
+    private void UpdateWindowBorder()
+    {
+        if (rootWindowBorder == null) return;
+        if (WindowState == WindowState.Maximized)
+        {
+            rootWindowBorder.CornerRadius = new CornerRadius(0);
+            rootWindowBorder.BorderThickness = new Thickness(0);
+            rootWindowBorder.Margin = new Thickness(6);
+        }
+        else
+        {
+            rootWindowBorder.CornerRadius = new CornerRadius(8);
+            rootWindowBorder.BorderThickness = new Thickness(1);
+            rootWindowBorder.Margin = new Thickness(0);
         }
     }
 }
