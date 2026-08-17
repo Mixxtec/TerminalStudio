@@ -10,7 +10,7 @@
             width: 100%;
             margin: 0;
             padding: 0;
-            background-color: #0f1214;
+            background-color: #1E1E1E;
             overflow: hidden;
         }
         .terminals-root {
@@ -82,6 +82,9 @@
             
             const term = new Terminal({
                 cursorBlink: true,
+                cursorStyle: 'bar',
+                cursorWidth: 2,
+                cursorInactiveStyle: 'bar',
                 convertEol: true,
                 fontFamily: '"Cascadia Code", "Cascadia Mono", "CaskaydiaCove Nerd Font", "Fira Code Nerd Font", "JetBrains Mono", Consolas, monospace',
                 fontSize: 14,
@@ -89,16 +92,21 @@
                 letterSpacing: 0,
                 scrollback: 2000,
                 theme: {
-                    background: '#0f1214',
-                    foreground: '#ffffff',
+                    background: '#1E1E1E',
+                    foreground: '#cccccc',
                     cursor: '#ffffff',
-                    selectionBackground: 'rgba(255, 255, 255, 0.3)'
+                    cursorAccent: '#1E1E1E',
+                    selectionBackground: 'rgba(255, 255, 255, 0.25)'
                 }
             });
 
             const fitAddon = new FitAddon.FitAddon();
             term.loadAddon(fitAddon);
             term.open(container);
+
+            container.addEventListener('click', () => {
+                term.focus();
+            });
 
             term.parser.registerOscHandler(7, data => {
                 const cwd = parseOsc7Url(data);
@@ -150,6 +158,8 @@
             }
             activeTabId = tabId;
             terminals[tabId].container.classList.add('active');
+
+            terminals[tabId].term.focus();
 
             requestAnimationFrame(() => {
                 fitActiveTerminal(true);
