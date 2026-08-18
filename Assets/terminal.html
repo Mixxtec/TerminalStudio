@@ -73,6 +73,25 @@
             }
         }
 
+        function copyToClipboard(text) {
+            if (!text) return;
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage({
+                    type: 'clipboard_set',
+                    text: text
+                });
+            }
+        }
+
+        function pasteFromClipboard(tabId) {
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage({
+                    type: 'clipboard_paste_request',
+                    tabId: tabId
+                });
+            }
+        }
+
         function createTerminal(tabId) {
             if (terminals[tabId]) { return; }
             const container = document.createElement('div');
@@ -106,6 +125,59 @@
 
             container.addEventListener('click', () => {
                 term.focus();
+            });
+
+            container.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                if (term.hasSelection()) {
+                    const selected = term.getSelection();
+                    copyToClipboard(selected);
+                    term.clearSelection();
+                } else {
+                    pasteFromClipboard(tabId);
+                }
+            });
+
+            term.attachCustomKeyEventHandler((e) => {
+                if (e.type !== 'keydown') return true;
+
+                // Ctrl+C or Ctrl+Shift+C
+                if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'c' || e.key === 'C')) {
+                    if (e.shiftKey || term.hasSelection()) {
+                        const selected = term.getSelection();
+                        if (selected) {
+                            copyToClipboard(selected);
+                            term.clearSelection();
+                        }
+                        return false;
+                    }
+                    // Let SIGINT Ctrl+C pass through to shell if no selection
+                    return true;
+                }
+
+                // Ctrl+V or Ctrl+Shift+V
+                if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'v' || e.key === 'V')) {
+                    pasteFromClipboard(tabId);
+                    return false;
+                }
+
+                // Shift+Insert (Paste)
+                if (e.shiftKey && !e.ctrlKey && !e.altKey && e.key === 'Insert') {
+                    pasteFromClipboard(tabId);
+                    return false;
+                }
+
+                // Ctrl+Insert (Copy)
+                if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 'Insert') {
+                    if (term.hasSelection()) {
+                        const selected = term.getSelection();
+                        copyToClipboard(selected);
+                        term.clearSelection();
+                    }
+                    return false;
+                }
+
+                return true;
             });
 
             term.parser.registerOscHandler(7, data => {
@@ -225,6 +297,11 @@
                         break;
                     case 'output':
                         writeToTerminal(message.tabId, message.data);
+                        break;
+                    case 'paste':
+                        if (terminals[message.tabId] && message.text) {
+                            terminals[message.tabId].term.paste(message.text);
+                        }
                         break;
                     case 'fit':
                         fitActiveTerminal(true);

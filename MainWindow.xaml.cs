@@ -86,6 +86,14 @@ public partial class MainWindow : Window
     {
         await webView.EnsureCoreWebView2Async();
         webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
+        webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+        webView.CoreWebView2.PermissionRequested += (s, args) =>
+        {
+            if (args.PermissionKind == Microsoft.Web.WebView2.Core.CoreWebView2PermissionKind.ClipboardRead)
+            {
+                args.State = Microsoft.Web.WebView2.Core.CoreWebView2PermissionState.Allow;
+            }
+        };
 
         webView.CoreWebView2.WebMessageReceived += (s, args) =>
         {
@@ -95,8 +103,40 @@ public partial class MainWindow : Window
                 var root = doc.RootElement;
                 string type = root.GetProperty("type").GetString() ?? "";
 
+                if (type.Equals("clipboard_set", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (root.TryGetProperty("text", out var textElem))
+                    {
+                        string text = textElem.GetString() ?? "";
+                        if (!string.IsNullOrEmpty(text))
+                        {
+                            try { Clipboard.SetText(text); } catch { }
+                        }
+                    }
+                    return;
+                }
+
                 if (!root.TryGetProperty("tabId", out var tabIdElem)) return;
                 string tabId = tabIdElem.GetString() ?? "";
+
+                if (type.Equals("clipboard_paste_request", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        if (Clipboard.ContainsText())
+                        {
+                            string pasteText = Clipboard.GetText();
+                            if (!string.IsNullOrEmpty(pasteText))
+                            {
+                                var msg = new { type = "paste", tabId, text = pasteText };
+                                string json = JsonSerializer.Serialize(msg);
+                                webView.CoreWebView2.PostWebMessageAsJson(json);
+                            }
+                        }
+                    }
+                    catch { }
+                    return;
+                }
 
                 if (type.Equals("input", StringComparison.OrdinalIgnoreCase))
                 {
