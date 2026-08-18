@@ -195,9 +195,11 @@ public sealed class TerminalSession : IDisposable
             envVars["HTTP_PROXY"] = addr;
             envVars["HTTPS_PROXY"] = addr;
             envVars["ALL_PROXY"] = addr;
+            envVars["GRPC_PROXY"] = addr;
             envVars["http_proxy"] = addr;
             envVars["https_proxy"] = addr;
             envVars["all_proxy"] = addr;
+            envVars["grpc_proxy"] = addr;
 
             if (!string.IsNullOrWhiteSpace(proxy.NoProxy))
             {
@@ -207,7 +209,7 @@ public sealed class TerminalSession : IDisposable
             }
 
             string currentWslEnv = envVars["WSLENV"];
-            string proxyWslVars = "HTTP_PROXY/u:HTTPS_PROXY/u:ALL_PROXY/u:NO_PROXY/u";
+            string proxyWslVars = "HTTP_PROXY/u:HTTPS_PROXY/u:ALL_PROXY/u:GRPC_PROXY/u:NO_PROXY/u:http_proxy/u:https_proxy/u:all_proxy/u:grpc_proxy/u:no_proxy/u";
             if (!currentWslEnv.Contains("HTTP_PROXY"))
             {
                 envVars["WSLENV"] = string.IsNullOrEmpty(currentWslEnv) ? proxyWslVars : currentWslEnv + ":" + proxyWslVars;
@@ -218,9 +220,11 @@ public sealed class TerminalSession : IDisposable
             envVars.Remove("HTTP_PROXY");
             envVars.Remove("HTTPS_PROXY");
             envVars.Remove("ALL_PROXY");
+            envVars.Remove("GRPC_PROXY");
             envVars.Remove("http_proxy");
             envVars.Remove("https_proxy");
             envVars.Remove("all_proxy");
+            envVars.Remove("grpc_proxy");
             envVars.Remove("NO_PROXY");
             envVars.Remove("no_proxy");
         }

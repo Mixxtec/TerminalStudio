@@ -21,7 +21,7 @@ public class ProxyConfig
 {
     public ProxyMode Mode { get; set; } = ProxyMode.Direct;
     public string? Address { get; set; } = "http://127.0.0.1:10809";
-    public string? NoProxy { get; set; } = "localhost,127.0.0.1";
+    public string? NoProxy { get; set; } = "localhost,127.0.0.1,::1,*.local";
 }
 
 public class TerminalConfig
