@@ -58,6 +58,7 @@ public partial class MainWindow : Window
             }
             _sessions.Clear();
         };
+        PreviewKeyDown += MainWindow_PreviewKeyDown;
     }
 
     private void SaveSessionConfig()
@@ -310,11 +311,52 @@ public partial class MainWindow : Window
         }
     }
 
-    private void btnAddTab_Click(object sender, RoutedEventArgs e)
+    private void btnAddDefaultTab_Click(object sender, RoutedEventArgs e)
+    {
+        btnAddPowerShell_Click(sender, e);
+    }
+
+    private void btnTabDropdown_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button button && button.ContextMenu != null)
         {
+            button.ContextMenu.PlacementTarget = button;
             button.ContextMenu.IsOpen = true;
+        }
+    }
+
+    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            if (e.Key == Key.D1 || e.Key == Key.NumPad1)
+            {
+                btnAddPowerShell_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+            }
+            else if (e.Key == Key.D2 || e.Key == Key.NumPad2)
+            {
+                btnAddCMD_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+            }
+            else if (e.Key == Key.D3 || e.Key == Key.NumPad3)
+            {
+                btnAddWSL_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+            }
+        }
+        else if (Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            if (e.Key == Key.T)
+            {
+                btnAddDefaultTab_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+            }
+            else if (e.Key == Key.W && !string.IsNullOrEmpty(_activeTabId))
+            {
+                RemoveTab(_activeTabId);
+                e.Handled = true;
+            }
         }
     }
 
@@ -529,9 +571,9 @@ public partial class MainWindow : Window
 
     private void UpdateTabsContainerLayout()
     {
-        if (tabsHostContainer != null && btnAddTab != null && tabsScrollViewer != null)
+        if (tabsHostContainer != null && addTabGroup != null && tabsScrollViewer != null)
         {
-            double availableWidth = Math.Max(0, tabsHostContainer.ActualWidth - btnAddTab.ActualWidth - btnAddTab.Margin.Left - btnAddTab.Margin.Right - 4);
+            double availableWidth = Math.Max(0, tabsHostContainer.ActualWidth - addTabGroup.ActualWidth - addTabGroup.Margin.Left - addTabGroup.Margin.Right - 4);
             if (availableWidth > 0)
             {
                 tabsScrollViewer.MaxWidth = availableWidth;
