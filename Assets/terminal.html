@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Terminal</title>
+    <link rel="stylesheet" href="xterm.css">
+    <style>
+        html, body {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #1E1E1E;
+            overflow: hidden;
+        }
+        .terminals-root {
+            height: 100%;
+            width: 100%;
+        }
+        .terminal-container {
+            width: 100%;
+            height: 100%;
+            display: none;
+        }
+        .terminal-container.active {
+            display: block;
+        }
+        .terminal-container .xterm {
+            height: 100%;
+            padding: 4px 0 0 6px;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f1214;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2a2d32;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3e4249;
+        }
+    </style>
+</head>
+<body>
+    <div class="terminals-root"></div>
+
+    <script src="xterm.js"></script>
+    <script src="xterm-addon-fit.js"></script>
+    <script>
+        const terminals = {};
+        let activeTabId = null;
+        let resizeDebounce = null;
+
+        function parseOsc7Url(data) {
+            try {
+                let raw = decodeURIComponent(data);
+                if (raw.startsWith('file://')) {
+                    const pathStart = raw.indexOf('/', 7);
+                    if (pathStart !== -1) {
+                        raw = raw.substring(pathStart);
+                    }
+                }
+                if (/^\/[A-Za-z]:/.test(raw)) {
+                    raw = raw.substring(1);
+                }
+                return raw.replace(/\//g, '\\');
+            } catch (e) {
+                return data;
+            }
+        }
+
+        function copyToClipboard(text) {
+            if (!text) return;
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage({
+                    type: 'clipboard_set',
+                    text: text
+                });
+            }
+        }
+
+        function pasteFromClipboard(tabId) {
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage({
+                    type: 'clipboard_paste_request',
+                    tabId: tabId
+                });
+            }
+        }
+
+        function createTerminal(tabId) {
+            if (terminals[tabId]) { return; }
+            const container = document.createElement('div');
+            container.id = `terminal-${tabId}`;
+            container.className = 'terminal-container';
+            document.querySelector('.terminals-root').appendChild(container);
+            
+            const term = new Terminal({
+                cursorBlink: true,
+                cursorStyle: 'bar',
+                cursorWidth: 2,
+                cursorInactiveStyle: 'bar',
+                convertEol: true,
+                fontFamily: '"Cascadia Code", "Cascadia Mono", "CaskaydiaCove Nerd Font", "Fira Code Nerd Font", "JetBrains Mono", Consolas, monospace',
+                fontSize: 14,
+                lineHeight: 1.2,
+                letterSpacing: 0,
+                scrollback: 2000,
+                theme: {
+                    background: '#1E1E1E',
+                    foreground: '#cccccc',
+                    cursor: '#ffffff',
+                    cursorAccent: '#1E1E1E',
+                    selectionBackground: 'rgba(255, 255, 255, 0.25)'
+                }
+            });
+
+            const fitAddon = new FitAddon.FitAddon();
+            term.loadAddon(fitAddon);
+            term.open(container);
+
+            container.addEventListener('click', () => {
+                term.focus();
+            });
+
+            container.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                if (term.hasSelection()) {
+                    const selected = term.getSelection();
+                    copyToClipboard(selected);
+                    term.clearSelection();
+                } else {
+                    pasteFromClipboard(tabId);
+                }
+            });
+
+            term.attachCustomKeyEventHandler((e) => {
+                if (e.type !== 'keydown') return true;
+
+                // Ctrl+C or Ctrl+Shift+C
+                if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'c' || e.key === 'C')) {
+                    if (e.shiftKey || term.hasSelection()) {
+                        const selected = term.getSelection();
+                        if (selected) {
+                            copyToClipboard(selected);
+                            term.clearSelection();
+                        }
+                        return false;
+                    }
+                    // Let SIGINT Ctrl+C pass through to shell if no selection
+                    return true;
+                }
+
+                // Ctrl+V or Ctrl+Shift+V
+                if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'v' || e.key === 'V')) {
+                    pasteFromClipboard(tabId);
+                    return false;
+                }
+
+                // Shift+Insert (Paste)
+                if (e.shiftKey && !e.ctrlKey && !e.altKey && e.key === 'Insert') {
+                    pasteFromClipboard(tabId);
+                    return false;
+                }
+
+                // Ctrl+Insert (Copy)
+                if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 'Insert') {
+                    if (term.hasSelection()) {
+                        const selected = term.getSelection();
+                        copyToClipboard(selected);
+                        term.clearSelection();
+                    }
+                    return false;
+                }
+
+                return true;
+            });
+
+            term.parser.registerOscHandler(7, data => {
+                const cwd = parseOsc7Url(data);
+                if (cwd && window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({ type: 'cwd', tabId, cwd });
+                }
+                return true;
+            });
+
+            term.parser.registerOscHandler(9, data => {
+                if (data.startsWith('9;')) {
+                    let cwd = data.substring(2).trim();
+                    if (cwd.startsWith('"') && cwd.endsWith('"')) {
+                        cwd = cwd.slice(1, -1);
+                    }
+                    if (cwd && window.chrome && window.chrome.webview) {
+                        window.chrome.webview.postMessage({ type: 'cwd', tabId, cwd });
+                    }
+                    return true;
+                }
+                return false;
+            });
+            
+            term.onData(data => {
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({
+                        type: 'input',
+                        tabId: tabId,
+                        data: data
+                    });
+                }
+            });
+
+            terminals[tabId] = { term, fitAddon, container, lastCols: 0, lastRows: 0 };
+            setActiveTerminal(tabId);
+        }
+
+        function removeTerminal(tabId) {
+            if (!terminals[tabId]) { return; }
+            terminals[tabId].term.dispose();
+            terminals[tabId].container.remove();
+            delete terminals[tabId];
+        }
+
+        function setActiveTerminal(tabId) {
+            if (!terminals[tabId]) { return; }
+            if (activeTabId && terminals[activeTabId] && activeTabId !== tabId) {
+                terminals[activeTabId].container.classList.remove('active');
+            }
+            activeTabId = tabId;
+            terminals[tabId].container.classList.add('active');
+
+            terminals[tabId].term.focus();
+
+            requestAnimationFrame(() => {
+                fitActiveTerminal(true);
+                terminals[tabId].term.focus();
+            });
+        }
+
+        function writeToTerminal(tabId, data) {
+            if (terminals[tabId]) {
+                terminals[tabId].term.write(data);
+            }
+        }
+
+        function fitActiveTerminal(force = false) {
+            if (!activeTabId || !terminals[activeTabId]) return;
+            const current = terminals[activeTabId];
+            if (!current.container.offsetParent) return;
+
+            try {
+                current.fitAddon.fit();
+                const cols = current.term.cols;
+                const rows = current.term.rows;
+
+                if (cols > 0 && rows > 0) {
+                    if (force || cols !== current.lastCols || rows !== current.lastRows) {
+                        current.lastCols = cols;
+                        current.lastRows = rows;
+                        if (window.chrome && window.chrome.webview) {
+                            window.chrome.webview.postMessage({
+                                type: 'resize',
+                                tabId: activeTabId,
+                                cols: cols,
+                                rows: rows
+                            });
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+
+        const resizeObserver = new ResizeObserver(() => {
+            if (resizeDebounce) cancelAnimationFrame(resizeDebounce);
+            resizeDebounce = requestAnimationFrame(() => {
+                fitActiveTerminal();
+            });
+        });
+        resizeObserver.observe(document.querySelector('.terminals-root'));
+
+        if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.addEventListener('message', event => {
+                const message = event.data;
+                if (!message) return;
+
+                switch (message.type) {
+                    case 'create':
+                        createTerminal(message.tabId);
+                        break;
+                    case 'remove':
+                        removeTerminal(message.tabId);
+                        break;
+                    case 'activate':
+                        setActiveTerminal(message.tabId);
+                        break;
+                    case 'output':
+                        writeToTerminal(message.tabId, message.data);
+                        break;
+                    case 'paste':
+                        if (terminals[message.tabId] && message.text) {
+                            terminals[message.tabId].term.paste(message.text);
+                        }
+                        break;
+                    case 'fit':
+                        fitActiveTerminal(true);
+                        break;
+                }
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+name: Release Build
+on:
+  push:
+    branches: 
+      - main
+  workflow_dispatch:
+permissions: write-all
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with: 
+          dotnet-version: '10.0.x'
+      - name: Build dependent win-x64
+        run: |
+          dotnet publish TerminalStudio.csproj -c Release -r win-x64 --no-self-contained -o ./dist/win-x64
+      - name: Build standalone win-x64
+        run: |
+          dotnet publish TerminalStudio.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o ./dist/win-x64-standalone
+      - name: Extract version
+        shell: pwsh
+        run: |
+          [xml]$proj = Get-Content TerminalStudio.csproj
+          $ver = "v" + $proj.Project.PropertyGroup.Version
+          echo "APP_VERSION=$ver" >> $env:GITHUB_ENV
+      - name: Create ZIP
+        shell: pwsh
+        run: |
+          $tag = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } else { 'latest' }
+          Compress-Archive -Path ./dist/win-x64/* -DestinationPath "./TerminalStudio-${env:APP_VERSION}-win-x64.zip" -Force
+          Compress-Archive -Path ./dist/win-x64-standalone/* -DestinationPath "./TerminalStudio-${env:APP_VERSION}-win-x64-standalone.zip" -Force
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.APP_VERSION }}
+          name: "TerminalStudio ${{env.APP_VERSION}}" 
+          files: |
+            TerminalStudio-*-win-x64.zip
+            TerminalStudio-*-win-x64-standalone.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
