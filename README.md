@@ -59,3 +59,9 @@ WebView2 uses ~80–100 MB on its own — spinning up one instance per tab would
 ## License
 
 [MIT](./LICENSE) © 2026 Mixxtec
+
+## Third-Party Licenses
+
+ - [xterm.js](https://github.com/xtermjs/xterm.js) — MIT License (c) Microsoft Corporation
+ - [xterm-addon-fit](https://github.com/xtermjs/xterm.js) — MIT License (c) Microsoft Corporation
+ - [WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) — (c) Microsoft Corporation
