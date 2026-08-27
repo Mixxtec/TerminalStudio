@@ -23,8 +23,8 @@
 
 
     <Border x:Name="rootWindowBorder"
-            Background="#FF1E1E1E"
-            BorderBrush="#333333"
+            Background="{StaticResource BrushBgBase}"
+            BorderBrush="{StaticResource BrushBorderSubtle}"
             BorderThickness="1"
             CornerRadius="8"
             ClipToBounds="True">
@@ -34,7 +34,7 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Background="#181818">
+        <Grid Grid.Row="0" Background="{StaticResource BrushBgDeep}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
@@ -97,7 +97,7 @@
                                                    Grid.Column="0"
                                                    Text="{Binding Title}" 
                                                    FontSize="12"
-                                                   Foreground="#9E9E9E"
+                                                   Foreground="{StaticResource BrushTextDim}"
                                                    TextTrimming="CharacterEllipsis"
                                                    VerticalAlignment="Center" 
                                                    Margin="2,0,4,0"/>
@@ -150,13 +150,13 @@
                                 </Border>
                                 <DataTemplate.Triggers>
                                     <Trigger SourceName="tabBorder" Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="tabBorder" Property="Background" Value="#2A2A2D"/>
-                                        <Setter TargetName="txtTitle" Property="Foreground" Value="#E0E0E0"/>
+                                        <Setter TargetName="tabBorder" Property="Background" Value="{StaticResource BrushBgHover}"/>
+                                        <Setter TargetName="txtTitle" Property="Foreground" Value="{StaticResource BrushTextSecondary}"/>
                                     </Trigger>
                                     <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                        <Setter TargetName="tabBorder" Property="Background" Value="#1E1E1E"/>
-                                        <Setter TargetName="tabBorder" Property="BorderBrush" Value="#333333"/>
-                                        <Setter TargetName="txtTitle" Property="Foreground" Value="#FFFFFF"/>
+                                        <Setter TargetName="tabBorder" Property="Background" Value="{StaticResource BrushBgBase}"/>
+                                        <Setter TargetName="tabBorder" Property="BorderBrush" Value="{StaticResource BrushBorderSubtle}"/>
+                                        <Setter TargetName="txtTitle" Property="Foreground" Value="{StaticResource BrushTextPrimary}"/>
                                     </DataTrigger>
                                 </DataTemplate.Triggers>
                             </DataTemplate>
@@ -179,7 +179,7 @@
                                 Click="btnAddDefaultTab_Click"
                                 WindowChrome.IsHitTestVisibleInChrome="True">
                             <Path Data="{StaticResource IconPlus}" 
-                                  Stroke="White" 
+                                  Stroke="{StaticResource BrushTextPrimary}" 
                                   StrokeThickness="1.5"
                                   StrokeStartLineCap="Round"
                                   StrokeEndLineCap="Round"
@@ -195,15 +195,8 @@
                                 ToolTip="Select Profile"
                                 Click="btnTabDropdown_Click"
                                 WindowChrome.IsHitTestVisibleInChrome="True">
-                            <Button.ContextMenu>
-                                <ContextMenu Placement="Bottom">
-                                    <MenuItem Header="PowerShell" InputGestureText="Ctrl+Shift+1" Click="btnAddPowerShell_Click" />
-                                    <MenuItem Header="CMD" InputGestureText="Ctrl+Shift+2" Click="btnAddCMD_Click" />
-                                    <MenuItem Header="WSL" InputGestureText="Ctrl+Shift+3" Click="btnAddWSL_Click" />
-                                </ContextMenu>
-                            </Button.ContextMenu>
                             <Path Data="{StaticResource IconChevronDown}" 
-                                  Stroke="#AAAAAA" 
+                                  Stroke="{StaticResource BrushTextMuted}" 
                                   StrokeThickness="1.5"
                                   StrokeStartLineCap="Round"
                                   StrokeEndLineCap="Round"
@@ -238,8 +231,8 @@
                AllowsTransparency="True"
                Placement="Bottom"
                PopupAnimation="Fade">
-            <Border Background="#1E1E1E" 
-                    BorderBrush="#3E3E42" 
+            <Border Background="{StaticResource BrushBgBase}" 
+                    BorderBrush="{StaticResource BrushBorderMid}" 
                     BorderThickness="1" 
                     CornerRadius="8" 
                     Width="290" 
@@ -249,12 +242,12 @@
                     <DropShadowEffect BlurRadius="16" ShadowDepth="6" Opacity="0.5" Color="Black"/>
                 </Border.Effect>
                 <StackPanel>
-                    <TextBlock Text="Tab Title" Foreground="#AAAAAA" FontSize="11" Margin="0,0,0,4"/>
+                    <TextBlock Text="Tab Title" Foreground="{StaticResource BrushTextMuted}" FontSize="11" Margin="0,0,0,4"/>
                     <TextBox x:Name="txtTabTitle" Margin="0,0,0,10"/>
 
-                    <Separator Background="#333333" Margin="0,0,0,10"/>
+                    <Separator Background="{StaticResource BrushBorderSubtle}" Margin="0,0,0,10"/>
 
-                    <TextBlock Text="Network Mode" Foreground="#AAAAAA" FontSize="11" Margin="0,0,0,4"/>
+                    <TextBlock Text="Network Mode" Foreground="{StaticResource BrushTextMuted}" FontSize="11" Margin="0,0,0,4"/>
                     <ComboBox x:Name="cmbProxyMode" SelectionChanged="cmbProxyMode_SelectionChanged" Margin="0,0,0,10">
                         <ComboBoxItem Content="Direct (No proxy)"/>
                         <ComboBoxItem Content="Local VPN (127.0.0.1:10809)"/>
@@ -263,8 +256,8 @@
 
                     <StackPanel x:Name="panelProxyFields">
                         <DockPanel Margin="0,0,0,4">
-                            <TextBlock Text="Proxy Address" Foreground="#AAAAAA" FontSize="11" DockPanel.Dock="Left"/>
-                            <TextBlock x:Name="txtProxyStatus" Foreground="#888888" FontSize="11" HorizontalAlignment="Right" DockPanel.Dock="Right"/>
+                            <TextBlock Text="Proxy Address" Foreground="{StaticResource BrushTextMuted}" FontSize="11" DockPanel.Dock="Left"/>
+                            <TextBlock x:Name="txtProxyStatus" Foreground="{StaticResource BrushTextDim}" FontSize="11" HorizontalAlignment="Right" DockPanel.Dock="Right"/>
                         </DockPanel>
                         <Grid Margin="0,0,0,10">
                             <Grid.ColumnDefinitions>
@@ -280,7 +273,7 @@
                                     Click="btnCheckProxy_Click"/>
                         </Grid>
 
-                        <TextBlock Text="Exceptions (NO_PROXY)" Foreground="#AAAAAA" FontSize="11" Margin="0,0,0,4"/>
+                        <TextBlock Text="Exceptions (NO_PROXY)" Foreground="{StaticResource BrushTextMuted}" FontSize="11" Margin="0,0,0,4"/>
                         <TextBox x:Name="txtNoProxy" Margin="0,0,0,14"/>
                     </StackPanel>
 

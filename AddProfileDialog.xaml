@@ -1,0 +1,57 @@
+<Window x:Class="TerminalStudio.AddProfileDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Add Profile"
+        Width="320"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False">
+
+    <Border Background="{StaticResource BrushBgSurface}" 
+            BorderBrush="{StaticResource BrushBorderMid}" 
+            BorderThickness="1" 
+            CornerRadius="8" 
+            Padding="12">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="16" ShadowDepth="6" Opacity="0.5" Color="Black"/>
+        </Border.Effect>
+        <StackPanel>
+            <TextBlock Text="Executable or command (e.g. nu.exe, python)" 
+                       Foreground="{StaticResource BrushTextMuted}" 
+                       FontSize="11" 
+                       Margin="0,0,0,6"/>
+
+            <TextBox x:Name="txtCommandLine" 
+                     Margin="0,0,0,4"
+                     TextChanged="TxtCommandLine_TextChanged"/>
+
+            <TextBlock x:Name="txtValidationStatus" 
+                       Foreground="{StaticResource BrushDanger}" 
+                       FontSize="11" 
+                       TextWrapping="Wrap" 
+                       Margin="0,4,0,0"
+                       MinHeight="16"/>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                <Button Content="Cancel" 
+                        IsCancel="True" 
+                        Style="{StaticResource SecondaryActionButtonStyle}"
+                        Width="75" 
+                        Height="28" 
+                        Margin="0,0,6,0" 
+                        Click="BtnCancel_Click"/>
+                <Button x:Name="btnAdd" 
+                        Content="Add Profile" 
+                        IsDefault="True" 
+                        Style="{StaticResource ActionButtonStyle}"
+                        Width="90" 
+                        Height="28" 
+                        Click="BtnAdd_Click"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

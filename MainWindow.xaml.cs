@@ -21,6 +21,9 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, TerminalSession> _sessions = new();
     private readonly ObservableCollection<TabItemModel> _tabItems = new();
     private readonly ConfigService _configService;
+    private readonly ShellDiscoveryService _discoveryService = new();
+    private List<ShellProfile> _customProfiles = new();
+    private string? _defaultProfileId;
     private string? _activeTabId;
     private TabItemModel? _editingTab;
 
@@ -66,6 +69,8 @@ public partial class MainWindow : Window
         var config = new SessionConfig
         {
             ActiveTabId = _activeTabId,
+            DefaultProfileId = _defaultProfileId,
+            CustomProfiles = _customProfiles.ToList(),
             Tabs = _tabItems.Select(t => t.Config).ToList()
         };
 
@@ -173,20 +178,32 @@ public partial class MainWindow : Window
         string htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "terminal.html");
         webView.CoreWebView2.Navigate(htmlPath);
 
-        webView.CoreWebView2.NavigationCompleted += (s, args) =>
+        webView.CoreWebView2.NavigationCompleted += async (s, args) =>
         {
             var config = _configService.LoadConfig();
+            _customProfiles = config.CustomProfiles ?? new List<ShellProfile>();
+            _defaultProfileId = config.DefaultProfileId;
 
             if (config.Tabs.Count == 0)
             {
-                var defaultTab = new TerminalConfig
+                var discovered = await _discoveryService.GetDiscoveredProfilesAsync(_customProfiles);
+                var defaultProf = discovered.FirstOrDefault(p => p.Id == _defaultProfileId) ?? discovered.FirstOrDefault();
+                if (defaultProf != null)
                 {
-                    Id = "1",
-                    Title = "PowerShell",
-                    CommandLine = "powershell.exe",
-                    Type = "PowerShell"
-                };
-                CreateTab(defaultTab);
+                    CreateTabFromProfile(defaultProf);
+                }
+                else
+                {
+                    var defaultTab = new TerminalConfig
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        Title = "PowerShell",
+                        CommandLine = "powershell.exe",
+                        Type = "PowerShell",
+                        WorkingDirectory = Environment.CurrentDirectory
+                    };
+                    CreateTab(defaultTab);
+                }
             }
             else
             {
@@ -311,21 +328,87 @@ public partial class MainWindow : Window
         }
     }
 
-    private void btnAddDefaultTab_Click(object sender, RoutedEventArgs e)
+    private void CreateTabFromProfile(ShellProfile profile)
     {
-        btnAddPowerShell_Click(sender, e);
+        var config = new TerminalConfig
+        {
+            Id = Guid.NewGuid().ToString(),
+            Title = profile.Title,
+            CommandLine = profile.CommandLine,
+            Type = profile.Type,
+            Distribution = profile.Distribution,
+            WorkingDirectory = profile.WorkingDirectory ?? Environment.CurrentDirectory
+        };
+        CreateTab(config);
     }
 
-    private void btnTabDropdown_Click(object sender, RoutedEventArgs e)
+    private async void btnAddDefaultTab_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button button && button.ContextMenu != null)
+        var discovered = await _discoveryService.GetDiscoveredProfilesAsync(_customProfiles);
+        var profile = discovered.FirstOrDefault(p => p.Id == _defaultProfileId) ?? discovered.FirstOrDefault();
+        if (profile != null)
         {
-            button.ContextMenu.PlacementTarget = button;
-            button.ContextMenu.IsOpen = true;
+            CreateTabFromProfile(profile);
+        }
+        else
+        {
+            CreateTab(new TerminalConfig
+            {
+                Id = Guid.NewGuid().ToString(),
+                Title = "PowerShell",
+                CommandLine = "powershell.exe",
+                Type = "PowerShell",
+                WorkingDirectory = Environment.CurrentDirectory
+            });
         }
     }
 
-    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    private async void btnTabDropdown_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button) return;
+
+        var discovered = await _discoveryService.GetDiscoveredProfilesAsync(_customProfiles);
+        var menu = new ContextMenu
+        {
+            PlacementTarget = button,
+            Placement = PlacementMode.Bottom
+        };
+
+        foreach (var profile in discovered)
+        {
+            var item = new MenuItem
+            {
+                Header = profile.Title,
+                InputGestureText = profile.ShortcutText ?? string.Empty
+            };
+            item.Click += (s, ev) => CreateTabFromProfile(profile);
+            menu.Items.Add(item);
+        }
+
+        var addNewItem = new MenuItem
+        {
+            Header = "+ Add new..."
+        };
+        addNewItem.Click += (s, ev) =>
+        {
+            var dialog = new AddProfileDialog
+            {
+                Owner = this
+            };
+
+            if (dialog.ShowDialog() == true && dialog.CreatedProfile != null)
+            {
+                _customProfiles.Add(dialog.CreatedProfile);
+                SaveSessionConfig();
+                CreateTabFromProfile(dialog.CreatedProfile);
+            }
+        };
+        menu.Items.Add(addNewItem);
+
+        menu.IsOpen = true;
+    }
+
+    private async void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
         {
@@ -341,7 +424,20 @@ public partial class MainWindow : Window
             }
             else if (e.Key == Key.D3 || e.Key == Key.NumPad3)
             {
-                btnAddWSL_Click(this, new RoutedEventArgs());
+                var wslDistros = await _discoveryService.GetWslDistrosAsync();
+                string distro = wslDistros.FirstOrDefault() ?? string.Empty;
+                string cmd = string.IsNullOrEmpty(distro) ? "wsl.exe" : $"wsl.exe -d \"{distro}\"";
+                string title = string.IsNullOrEmpty(distro) ? "WSL" : distro;
+
+                CreateTab(new TerminalConfig
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Title = title,
+                    CommandLine = cmd,
+                    Type = "WSL",
+                    Distribution = string.IsNullOrEmpty(distro) ? null : distro,
+                    WorkingDirectory = Environment.CurrentDirectory
+                });
                 e.Handled = true;
             }
         }
@@ -449,18 +545,18 @@ public partial class MainWindow : Window
     private async void btnCheckProxy_Click(object sender, RoutedEventArgs e)
     {
         txtProxyStatus.Text = "Checking...";
-        txtProxyStatus.Foreground = new SolidColorBrush(Color.FromRgb(170, 170, 170));
+        txtProxyStatus.Foreground = (SolidColorBrush)Application.Current.Resources["BrushTextMuted"];
 
         bool ok = await NetworkUtils.CheckProxyAvailableAsync(txtProxyAddress.Text);
         if (ok)
         {
             txtProxyStatus.Text = "Available";
-            txtProxyStatus.Foreground = new SolidColorBrush(Color.FromRgb(78, 201, 176));
+            txtProxyStatus.Foreground = (SolidColorBrush)Application.Current.Resources["BrushSuccess"];
         }
         else
         {
             txtProxyStatus.Text = "Unavailable";
-            txtProxyStatus.Foreground = new SolidColorBrush(Color.FromRgb(244, 71, 71));
+            txtProxyStatus.Foreground = (SolidColorBrush)Application.Current.Resources["BrushDanger"];
         }
     }
 
