@@ -30,6 +30,8 @@ public partial class MainWindow : Window
     private bool _isDraggingTab;
     private TabItemModel? _draggedTab;
     private Point _dragStartPoint;
+    private System.Windows.Forms.NotifyIcon? _notifyIcon;
+    private bool _isExplicitExit;
 
     public MainWindow()
     {
@@ -55,17 +57,10 @@ public partial class MainWindow : Window
             UpdateMaximizeButtonIcon();
             SendFitMessage();
         };
-        Closing += (s, e) =>
-        {
-            SaveSessionConfig();
-
-            foreach (var session in _sessions.Values)
-            {
-                session.Dispose();
-            }
-            _sessions.Clear();
-        };
+        Closing += MainWindow_Closing;
         PreviewKeyDown += MainWindow_PreviewKeyDown;
+
+        InitializeNotifyIcon();
     }
 
     private void SaveSessionConfig()
@@ -817,6 +812,114 @@ public partial class MainWindow : Window
         catch { }
     }
 
+    private void InitializeNotifyIcon()
+    {
+        string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "Icon.ico");
+        System.Drawing.Icon? appIcon = null;
+
+        if (File.Exists(iconPath))
+        {
+            try
+            {
+                appIcon = new System.Drawing.Icon(iconPath);
+            }
+            catch { }
+        }
+
+        if (appIcon == null)
+        {
+            appIcon = System.Drawing.SystemIcons.Application;
+        }
+
+        var contextMenu = new System.Windows.Forms.ContextMenuStrip
+        {
+            Renderer = new DarkToolStripRenderer()
+        };
+
+        var openItem = new System.Windows.Forms.ToolStripMenuItem("Open TerminalStudio");
+        openItem.Click += (s, e) => ShowAndActivateWindow();
+
+        var newTabItem = new System.Windows.Forms.ToolStripMenuItem("New Tab");
+        newTabItem.Click += (s, e) =>
+        {
+            ShowAndActivateWindow();
+            btnAddDefaultTab_Click(this, new RoutedEventArgs());
+        };
+
+        var exitItem = new System.Windows.Forms.ToolStripMenuItem("Exit");
+        exitItem.Click += (s, e) => ExitApplication();
+
+        contextMenu.Items.Add(openItem);
+        contextMenu.Items.Add(newTabItem);
+        contextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+        contextMenu.Items.Add(exitItem);
+
+        _notifyIcon = new System.Windows.Forms.NotifyIcon
+        {
+            Icon = appIcon,
+            Text = "TerminalStudio",
+            Visible = true,
+            ContextMenuStrip = contextMenu
+        };
+
+        _notifyIcon.DoubleClick += (s, e) => ToggleShowWindow();
+    }
+
+    private void ToggleShowWindow()
+    {
+        if (Visibility == Visibility.Visible && WindowState != WindowState.Minimized)
+        {
+            Hide();
+        }
+        else
+        {
+            ShowAndActivateWindow();
+        }
+    }
+
+    private void ShowAndActivateWindow()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Normal;
+        }
+        Activate();
+        Focus();
+    }
+
+    private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (!_isExplicitExit)
+        {
+            e.Cancel = true;
+            Hide();
+            return;
+        }
+
+        SaveSessionConfig();
+
+        if (_notifyIcon != null)
+        {
+            _notifyIcon.Visible = false;
+            _notifyIcon.Dispose();
+            _notifyIcon = null;
+        }
+
+        foreach (var session in _sessions.Values)
+        {
+            session.Dispose();
+        }
+        _sessions.Clear();
+    }
+
+    public void ExitApplication()
+    {
+        _isExplicitExit = true;
+        Close();
+        System.Windows.Application.Current.Shutdown();
+    }
+
     private void UpdateWindowBorder()
     {
         if (rootWindowBorder == null) return;
@@ -833,4 +936,45 @@ public partial class MainWindow : Window
             rootWindowBorder.Margin = new Thickness(0);
         }
     }
+}
+
+internal class DarkToolStripRenderer : System.Windows.Forms.ToolStripProfessionalRenderer
+{
+    public DarkToolStripRenderer() : base(new DarkColorTable()) { }
+
+    protected override void OnRenderItemText(System.Windows.Forms.ToolStripItemTextRenderEventArgs e)
+    {
+        var colorKey = (e.Item.Selected || e.Item.Pressed) ? "ColorBgDeep" : "ColorTextPrimary";
+        if (Application.Current?.Resources[colorKey] is System.Windows.Media.Color wpfColor)
+        {
+            e.TextColor = System.Drawing.Color.FromArgb(wpfColor.A, wpfColor.R, wpfColor.G, wpfColor.B);
+        }
+        base.OnRenderItemText(e);
+    }
+}
+
+internal class DarkColorTable : System.Windows.Forms.ProfessionalColorTable
+{
+    private static System.Drawing.Color GetResourceColor(string key, System.Drawing.Color fallback)
+    {
+        if (Application.Current?.Resources[key] is System.Windows.Media.Color c)
+        {
+            return System.Drawing.Color.FromArgb(c.A, c.R, c.G, c.B);
+        }
+        return fallback;
+    }
+
+    public override System.Drawing.Color ToolStripDropDownBackground => GetResourceColor("ColorBgBase", System.Drawing.Color.FromArgb(30, 30, 30));
+    public override System.Drawing.Color ImageMarginGradientBegin => GetResourceColor("ColorBgBase", System.Drawing.Color.FromArgb(30, 30, 30));
+    public override System.Drawing.Color ImageMarginGradientMiddle => GetResourceColor("ColorBgBase", System.Drawing.Color.FromArgb(30, 30, 30));
+    public override System.Drawing.Color ImageMarginGradientEnd => GetResourceColor("ColorBgBase", System.Drawing.Color.FromArgb(30, 30, 30));
+    public override System.Drawing.Color MenuBorder => GetResourceColor("ColorBorderMid", System.Drawing.Color.FromArgb(62, 62, 66));
+    public override System.Drawing.Color MenuItemBorder => System.Drawing.Color.Transparent;
+    public override System.Drawing.Color MenuItemSelected => GetResourceColor("ColorBgHighlight", System.Drawing.Color.FromArgb(45, 45, 48));
+    public override System.Drawing.Color MenuItemSelectedGradientBegin => GetResourceColor("ColorBgHighlight", System.Drawing.Color.FromArgb(45, 45, 48));
+    public override System.Drawing.Color MenuItemSelectedGradientEnd => GetResourceColor("ColorBgHighlight", System.Drawing.Color.FromArgb(45, 45, 48));
+    public override System.Drawing.Color MenuItemPressedGradientBegin => GetResourceColor("ColorBgPressed", System.Drawing.Color.FromArgb(37, 37, 38));
+    public override System.Drawing.Color MenuItemPressedGradientEnd => GetResourceColor("ColorBgPressed", System.Drawing.Color.FromArgb(37, 37, 38));
+    public override System.Drawing.Color SeparatorDark => GetResourceColor("ColorBorderMid", System.Drawing.Color.FromArgb(62, 62, 66));
+    public override System.Drawing.Color SeparatorLight => GetResourceColor("ColorBgBase", System.Drawing.Color.FromArgb(30, 30, 30));
 }
