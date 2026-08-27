@@ -11,6 +11,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using TerminalStudio.Models;
 using TerminalStudio.Services;
 
@@ -26,6 +27,9 @@ public partial class MainWindow : Window
     private string? _defaultProfileId;
     private string? _activeTabId;
     private TabItemModel? _editingTab;
+    private bool _isDraggingTab;
+    private TabItemModel? _draggedTab;
+    private Point _dragStartPoint;
 
     public MainWindow()
     {
@@ -317,7 +321,121 @@ public partial class MainWindow : Window
         if (sender is FrameworkElement elem && elem.DataContext is TabItemModel model)
         {
             ActivateTab(model.Id);
+            _isDraggingTab = true;
+            _draggedTab = model;
+            _dragStartPoint = e.GetPosition(this);
+            elem.CaptureMouse();
         }
+    }
+
+    private void TabHeader_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_isDraggingTab || _draggedTab == null || sender is not FrameworkElement elem)
+            return;
+
+        Point currentPoint = e.GetPosition(this);
+        Vector diff = currentPoint - _dragStartPoint;
+
+        if (e.LeftButton == MouseButtonState.Pressed && Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance)
+        {
+            int oldIndex = _tabItems.IndexOf(_draggedTab);
+            if (oldIndex < 0) return;
+
+            Point tabPos = e.GetPosition(tabsControl);
+            double currentX = 0;
+            int newIndex = oldIndex;
+
+            for (int i = 0; i < _tabItems.Count; i++)
+            {
+                if (tabsControl.ItemContainerGenerator.ContainerFromIndex(i) is FrameworkElement container)
+                {
+                    double itemWidth = container.ActualWidth;
+                    double itemMidX = currentX + itemWidth / 2.0;
+
+                    if (i < oldIndex && tabPos.X < itemMidX)
+                    {
+                        newIndex = i;
+                        break;
+                    }
+                    if (i > oldIndex && tabPos.X > itemMidX)
+                    {
+                        newIndex = i;
+                    }
+
+                    currentX += itemWidth;
+                }
+            }
+
+            if (newIndex != oldIndex && newIndex >= 0 && newIndex < _tabItems.Count)
+            {
+                var oldPositions = new Dictionary<TabItemModel, double>();
+                for (int i = 0; i < _tabItems.Count; i++)
+                {
+                    if (tabsControl.ItemContainerGenerator.ContainerFromIndex(i) is FrameworkElement container)
+                    {
+                        Point p = container.TransformToAncestor(tabsControl).Transform(new Point(0, 0));
+                        oldPositions[_tabItems[i]] = p.X;
+                    }
+                }
+
+                _tabItems.Move(oldIndex, newIndex);
+                tabsControl.UpdateLayout();
+                SaveSessionConfig();
+
+                for (int i = 0; i < _tabItems.Count; i++)
+                {
+                    var tab = _tabItems[i];
+                    if (tabsControl.ItemContainerGenerator.ContainerFromIndex(i) is FrameworkElement container &&
+                        oldPositions.TryGetValue(tab, out double oldX))
+                    {
+                        Point newPos = container.TransformToAncestor(tabsControl).Transform(new Point(0, 0));
+                        double deltaX = oldX - newPos.X;
+
+                        if (Math.Abs(deltaX) > 0.5)
+                        {
+                            var transform = container.RenderTransform as TranslateTransform;
+                            if (transform == null)
+                            {
+                                transform = new TranslateTransform();
+                                container.RenderTransform = transform;
+                            }
+
+                            var anim = new DoubleAnimation
+                            {
+                                From = deltaX,
+                                To = 0,
+                                Duration = TimeSpan.FromMilliseconds(130),
+                                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                            };
+                            transform.BeginAnimation(TranslateTransform.XProperty, anim);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private void TabHeader_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement elem)
+        {
+            elem.ReleaseMouseCapture();
+        }
+
+        for (int i = 0; i < _tabItems.Count; i++)
+        {
+            if (tabsControl.ItemContainerGenerator.ContainerFromIndex(i) is FrameworkElement container)
+            {
+                if (container.RenderTransform is TranslateTransform transform)
+                {
+                    transform.BeginAnimation(TranslateTransform.XProperty, null);
+                    transform.X = 0;
+                }
+            }
+        }
+
+        _isDraggingTab = false;
+        _draggedTab = null;
     }
 
     private void CloseTab_Click(object sender, RoutedEventArgs e)

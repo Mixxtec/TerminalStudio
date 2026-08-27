@@ -84,6 +84,8 @@
                                         BorderThickness="1,1,1,0"
                                         Cursor="Hand"
                                         MouseLeftButtonDown="TabHeader_MouseLeftButtonDown"
+                                        MouseMove="TabHeader_MouseMove"
+                                        MouseLeftButtonUp="TabHeader_MouseLeftButtonUp"
                                         WindowChrome.IsHitTestVisibleInChrome="True">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
