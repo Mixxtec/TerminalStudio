@@ -52,9 +52,10 @@ WebView2 uses ~80–100 MB on its own — spinning up one instance per tab would
 
 ## Roadmap
 
-- **v1.1** — System tray integration, complete rework of the new tab menu (PowerShell, pwsh, CMD, WSL distros, custom `.exe` from `PATH`), tab drag-and-drop reordering, and tear-off into a new window.
+- **v1.1** — System tray integration, complete rework of the new tab menu (PowerShell, pwsh, CMD, WSL distros, custom `.exe` from `PATH`), tab drag-and-drop reordering.
 - **v1.2** — Auto-start script chains, shared and per-tab command history navigation (`Alt+Up` / `Alt+Down`).
 - **v1.3** — Split container layouts (horizontal and vertical panes within a single tab).
+- **Future** — Multi-window support and tab tear-off.
 
 ## License
 
