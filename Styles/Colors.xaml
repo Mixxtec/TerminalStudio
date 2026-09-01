@@ -1,0 +1,73 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Color x:Key="ColorBgDeep">#FF181818</Color>
+    <Color x:Key="ColorBgBase">#FF1E1E1E</Color>
+    <Color x:Key="ColorBgSurface">#FF252526</Color>
+    <Color x:Key="ColorBgHover">#FF2A2A2D</Color>
+    <Color x:Key="ColorBgHighlight">#FF2D2D30</Color>
+    <Color x:Key="ColorBgPressed">#FF252525</Color>
+
+    <Color x:Key="ColorBorderSubtle">#FF333333</Color>
+    <Color x:Key="ColorBorderMid">#FF3E3E42</Color>
+    <Color x:Key="ColorBorderHover">#FF555555</Color>
+
+    <Color x:Key="ColorTextPrimary">#FFFFFFFF</Color>
+    <Color x:Key="ColorTextSecondary">#FFCCCCCC</Color>
+    <Color x:Key="ColorTextMuted">#FFAAAAAA</Color>
+    <Color x:Key="ColorTextDim">#FF888888</Color>
+    <Color x:Key="ColorTextDisabled">#FF666666</Color>
+    <Color x:Key="ColorTextShortcut">#FF777777</Color>
+
+    <Color x:Key="ColorAccent">#FF007ACC</Color>
+    <Color x:Key="ColorAccentHover">#FF0098FF</Color>
+    <Color x:Key="ColorAccentPressed">#FF0062A3</Color>
+
+    <Color x:Key="ColorDanger">#FFF44747</Color>
+    <Color x:Key="ColorDangerHover">#FFE81123</Color>
+    <Color x:Key="ColorDangerPressed">#FFC4101F</Color>
+    <Color x:Key="ColorSuccess">#FF4EC9B0</Color>
+
+    <Color x:Key="ColorBgHoverStrong">#FF444444</Color>
+
+    <Color x:Key="ColorTabIconActive">#FFDDDDDD</Color>
+    <Color x:Key="ColorTabIconInactive">#FF888888</Color>
+
+    <Color x:Key="ColorScrollThumb">#FF4E4E52</Color>
+    <Color x:Key="ColorScrollThumbHover">#FF777777</Color>
+    <Color x:Key="ColorScrollThumbDrag">#FF999999</Color>
+
+    <SolidColorBrush x:Key="BrushBgDeep" Color="{StaticResource ColorBgDeep}"/>
+    <SolidColorBrush x:Key="BrushBgBase" Color="{StaticResource ColorBgBase}"/>
+    <SolidColorBrush x:Key="BrushBgSurface" Color="{StaticResource ColorBgSurface}"/>
+    <SolidColorBrush x:Key="BrushBgHover" Color="{StaticResource ColorBgHover}"/>
+    <SolidColorBrush x:Key="BrushBgHighlight" Color="{StaticResource ColorBgHighlight}"/>
+    <SolidColorBrush x:Key="BrushBgPressed" Color="{StaticResource ColorBgPressed}"/>
+
+    <SolidColorBrush x:Key="BrushBorderSubtle" Color="{StaticResource ColorBorderSubtle}"/>
+    <SolidColorBrush x:Key="BrushBorderMid" Color="{StaticResource ColorBorderMid}"/>
+    <SolidColorBrush x:Key="BrushBorderHover" Color="{StaticResource ColorBorderHover}"/>
+
+    <SolidColorBrush x:Key="BrushTextPrimary" Color="{StaticResource ColorTextPrimary}"/>
+    <SolidColorBrush x:Key="BrushTextSecondary" Color="{StaticResource ColorTextSecondary}"/>
+    <SolidColorBrush x:Key="BrushTextMuted" Color="{StaticResource ColorTextMuted}"/>
+    <SolidColorBrush x:Key="BrushTextDim" Color="{StaticResource ColorTextDim}"/>
+    <SolidColorBrush x:Key="BrushTextDisabled" Color="{StaticResource ColorTextDisabled}"/>
+    <SolidColorBrush x:Key="BrushTextShortcut" Color="{StaticResource ColorTextShortcut}"/>
+
+    <SolidColorBrush x:Key="BrushAccent" Color="{StaticResource ColorAccent}"/>
+    <SolidColorBrush x:Key="BrushAccentHover" Color="{StaticResource ColorAccentHover}"/>
+    <SolidColorBrush x:Key="BrushAccentPressed" Color="{StaticResource ColorAccentPressed}"/>
+
+    <SolidColorBrush x:Key="BrushDanger" Color="{StaticResource ColorDanger}"/>
+    <SolidColorBrush x:Key="BrushDangerHover" Color="{StaticResource ColorDangerHover}"/>
+    <SolidColorBrush x:Key="BrushDangerPressed" Color="{StaticResource ColorDangerPressed}"/>
+    <SolidColorBrush x:Key="BrushSuccess" Color="{StaticResource ColorSuccess}"/>
+
+    <SolidColorBrush x:Key="BrushBgHoverStrong" Color="{StaticResource ColorBgHoverStrong}"/>
+
+    <SolidColorBrush x:Key="BrushScrollThumb" Color="{StaticResource ColorScrollThumb}"/>
+    <SolidColorBrush x:Key="BrushScrollThumbHover" Color="{StaticResource ColorScrollThumbHover}"/>
+    <SolidColorBrush x:Key="BrushScrollThumbDrag" Color="{StaticResource ColorScrollThumbDrag}"/>
+
+</ResourceDictionary>

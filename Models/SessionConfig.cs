@@ -45,5 +45,7 @@ public class TerminalConfig
 public class SessionConfig
 {
     public string? ActiveTabId { get; set; }
+    public string? DefaultProfileId { get; set; }
+    public List<ShellProfile> CustomProfiles { get; set; } = new();
     public List<TerminalConfig> Tabs { get; set; } = new();
 }
